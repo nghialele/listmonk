@@ -46,6 +46,7 @@ func (a *App) GetTemplate(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+<<<<<<< HEAD
 // GetTemplates handles retrieval of templates.
 func (a *App) GetTemplates(c echo.Context) error {
 	// If no_body is true, blank out the body of the template from the response.
@@ -88,6 +89,43 @@ func (a *App) PreviewTemplateBody(c echo.Context) error {
 	// Body is posted with the request.
 	if tpl.Type == "" {
 		tpl.Type = models.TemplateTypeCampaign
+=======
+// handlePreviewTemplate renders the HTML preview of a template.
+func handlePreviewTemplate(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+		tpl   models.Template
+	)
+
+	// Body is posted.
+	if c.Request().Method == http.MethodPost {
+		tpl = models.Template{
+			Type: c.FormValue("template_type"),
+			Body: c.FormValue("body"),
+		}
+
+		if tpl.Type == "" {
+			tpl.Type = models.TemplateTypeCampaign
+		}
+
+		if tpl.Type == models.TemplateTypeCampaign && !regexpTplTag.MatchString(tpl.Body) {
+			return echo.NewHTTPError(http.StatusBadRequest,
+				app.i18n.Ts("templates.placeholderHelp", "placeholder", tplTag))
+		}
+	} else {
+		// There is no body. Fetch the template.
+		if id < 1 {
+			return echo.NewHTTPError(http.StatusBadRequest, app.i18n.T("globals.messages.invalidID"))
+		}
+
+		t, err := app.core.GetTemplate(id, false)
+		if err != nil {
+			return err
+		}
+
+		tpl = t
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 	}
 
 	if tpl.Type == models.TemplateTypeCampaign && !regexpTplTag.MatchString(tpl.Body) {
@@ -232,7 +270,7 @@ func (a *App) validateTemplate(o models.Template) error {
 // previewTemplate renders the HTML preview of a template.
 func (a *App) previewTemplate(tpl models.Template) ([]byte, error) {
 	var out []byte
-	if tpl.Type == models.TemplateTypeCampaign {
+	if tpl.Type == models.TemplateTypeCampaign || tpl.Type == models.TemplateTypeCampaignVisual {
 		camp := models.Campaign{
 			UUID:         dummyUUID,
 			Name:         a.i18n.T("templates.dummyName"),
@@ -271,5 +309,163 @@ func (a *App) previewTemplate(tpl models.Template) ([]byte, error) {
 		out = m.Body
 	}
 
+<<<<<<< HEAD
 	return out, nil
+=======
+	return c.HTML(http.StatusOK, string(out))
+}
+
+// handleCreateTemplate handles template creation.
+func handleCreateTemplate(c echo.Context) error {
+	var (
+		app = c.Get("app").(*App)
+		o   = models.Template{}
+	)
+
+	if err := c.Bind(&o); err != nil {
+		return err
+	}
+
+	if err := validateTemplate(o, app); err != nil {
+		return err
+	}
+
+	var f template.FuncMap
+
+	// Subject is only relevant for fixed tx templates. For campaigns,
+	// the subject changes per campaign and is on models.Campaign.
+	if o.Type == models.TemplateTypeCampaign || o.Type == models.TemplateTypeCampaignVisual {
+		o.Subject = ""
+		f = app.manager.TemplateFuncs(nil)
+	} else {
+		f = app.manager.GenericTemplateFuncs()
+	}
+
+	// Compile the template and validate.
+	if err := o.Compile(f); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	// Create the template the in the DB.
+	out, err := app.core.CreateTemplate(o.Name, o.Type, o.Subject, []byte(o.Body), o.BodySource)
+	if err != nil {
+		return err
+	}
+
+	// If it's a transactional template, cache it in the manager
+	// to be used for arbitrary incoming tx message pushes.
+	if o.Type == models.TemplateTypeTx {
+		app.manager.CacheTpl(out.ID, &o)
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+}
+
+// handleUpdateTemplate handles template modification.
+func handleUpdateTemplate(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+	)
+
+	if id < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, app.i18n.T("globals.messages.invalidID"))
+	}
+
+	var o models.Template
+	if err := c.Bind(&o); err != nil {
+		return err
+	}
+
+	if err := validateTemplate(o, app); err != nil {
+		return err
+	}
+
+	var f template.FuncMap
+
+	// Subject is only relevant for fixed tx templates. For campaigns,
+	// the subject changes per campaign and is on models.Campaign.
+	if o.Type == models.TemplateTypeCampaign {
+		o.Subject = ""
+		f = app.manager.TemplateFuncs(nil)
+	} else {
+		f = app.manager.GenericTemplateFuncs()
+	}
+
+	// Compile the template and validate.
+	if err := o.Compile(f); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	out, err := app.core.UpdateTemplate(id, o.Name, o.Subject, []byte(o.Body), o.BodySource)
+	if err != nil {
+		return err
+	}
+
+	// If it's a transactional template, cache it.
+	if out.Type == models.TemplateTypeTx {
+		app.manager.CacheTpl(out.ID, &o)
+	}
+
+	return c.JSON(http.StatusOK, okResp{out})
+
+}
+
+// handleTemplateSetDefault handles template modification.
+func handleTemplateSetDefault(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+	)
+
+	if id < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, app.i18n.T("globals.messages.invalidID"))
+	}
+
+	if err := app.core.SetDefaultTemplate(id); err != nil {
+		return err
+	}
+
+	return handleGetTemplates(c)
+}
+
+// handleDeleteTemplate handles template deletion.
+func handleDeleteTemplate(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+	)
+
+	if id < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, app.i18n.T("globals.messages.invalidID"))
+	}
+
+	if err := app.core.DeleteTemplate(id); err != nil {
+		return err
+	}
+
+	// Delete cached template.
+	app.manager.DeleteTpl(id)
+
+	return c.JSON(http.StatusOK, okResp{true})
+}
+
+// compileTemplate validates template fields.
+func validateTemplate(o models.Template, app *App) error {
+	if !strHasLen(o.Name, 1, stdInputMaxLen) {
+		return errors.New(app.i18n.T("campaigns.fieldInvalidName"))
+	}
+
+	if o.Type == models.TemplateTypeCampaign && !regexpTplTag.MatchString(o.Body) {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			app.i18n.Ts("templates.placeholderHelp", "placeholder", tplTag))
+	}
+
+	if o.Type == models.TemplateTypeTx && strings.TrimSpace(o.Subject) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest,
+			app.i18n.Ts("globals.messages.missingFields", "name", "subject"))
+	}
+
+	return nil
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 }

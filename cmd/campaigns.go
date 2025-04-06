@@ -132,16 +132,28 @@ func (a *App) GetCampaign(c echo.Context) error {
 	return c.JSON(http.StatusOK, okResp{out})
 }
 
+<<<<<<< HEAD
 // PreviewCampaign renders the HTML preview of a campaign body.
 func (a *App) PreviewCampaign(c echo.Context) error {
 	// Get the campaign ID.
 	id := getID(c)
+=======
+// handlePreviewCampaign renders the HTML preview of a campaign body.
+func handlePreviewCampaign(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+		camp  models.Campaign
+		err   error
+	)
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 
 	// Check if the user has access to the campaign.
 	if err := a.checkCampaignPerm(auth.PermTypeGet, id, c); err != nil {
 		return err
 	}
 
+<<<<<<< HEAD
 	// Fetch the campaign body from the DB.
 	tplID, _ := strconv.Atoi(c.FormValue("template_id"))
 	camp, err := a.core.GetCampaignForPreview(id, tplID)
@@ -149,10 +161,34 @@ func (a *App) PreviewCampaign(c echo.Context) error {
 		return err
 	}
 
+=======
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 	// There's a body in the request to preview instead of the body in the DB.
 	if c.Request().Method == http.MethodPost {
-		camp.ContentType = c.FormValue("content_type")
-		camp.Body = c.FormValue("body")
+		var (
+			tplID, _    = strconv.Atoi(c.FormValue("template_id"))
+			contentType = c.FormValue("content_type")
+			body        = c.FormValue("body")
+			tp          *int
+		)
+
+		// For visual content type don't use the tempalte for preview, use only body.
+		if tplID > 0 && contentType != models.CampaignContentTypeVisual {
+			tp = &tplID
+		}
+
+		camp, err = app.core.GetCampaignForPreviewWithTemplate(id, tp)
+		if err != nil {
+			return err
+		}
+
+		camp.ContentType = contentType
+		camp.Body = body
+	} else {
+		camp, err = app.core.GetCampaignForPreview(id)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Use a dummy campaign ID to prevent views and clicks from {{ TrackView }}
@@ -214,9 +250,6 @@ func (a *App) CreateCampaign(c echo.Context) error {
 		o.Type = models.CampaignTypeRegular
 	}
 
-	if o.ContentType == "" {
-		o.ContentType = models.CampaignContentTypeRichtext
-	}
 	if o.Messenger == "" {
 		o.Messenger = "email"
 	}
@@ -228,7 +261,7 @@ func (a *App) CreateCampaign(c echo.Context) error {
 		o = c
 	}
 
-	if o.ArchiveTemplateID == 0 {
+	if o.ArchiveTemplateID.Valid && o.ArchiveTemplateID.Int64 != 0 {
 		o.ArchiveTemplateID = o.TemplateID
 	}
 
@@ -242,6 +275,7 @@ func (a *App) CreateCampaign(c echo.Context) error {
 
 // UpdateCampaign handles campaign modification.
 // Campaigns that are done cannot be modified.
+<<<<<<< HEAD
 func (a *App) UpdateCampaign(c echo.Context) error {
 	// Get the campaign ID.
 	id := getID(c)
@@ -249,6 +283,16 @@ func (a *App) UpdateCampaign(c echo.Context) error {
 	// Check if the user has access to the campaign.
 	if err := a.checkCampaignPerm(auth.PermTypeManage, id, c); err != nil {
 		return err
+=======
+func handleUpdateCampaign(c echo.Context) error {
+	var (
+		app   = c.Get("app").(*App)
+		id, _ = strconv.Atoi(c.Param("id"))
+	)
+
+	if id < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, app.i18n.T("globals.messages.invalidID"))
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 	}
 
 	// Retrieve the campaign from the DB.
@@ -438,9 +482,18 @@ func (a *App) TestCampaign(c echo.Context) error {
 		return err
 	}
 
+<<<<<<< HEAD
 	// Get the campaign from the DB for previewing.
 	tplID, _ := strconv.Atoi(c.FormValue("template_id"))
 	camp, err := a.core.GetCampaignForPreview(id, tplID)
+=======
+	// The campaign.
+	var tid *int
+	if tplID > 0 {
+		tid = &tplID
+	}
+	camp, err := app.core.GetCampaignForPreviewWithTemplate(campID, tid)
+>>>>>>> 678f11ce4faaafb6553243df2efd61243ec796e0
 	if err != nil {
 		return err
 	}
