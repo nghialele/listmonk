@@ -3,7 +3,7 @@ frontend/.cache/
 frontend/yarn.lock
 frontend/build/
 .vscode/
-
+.github/
 config.toml
 node_modules
 listmonk
